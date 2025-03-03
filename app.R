@@ -1,25 +1,17 @@
-library(shiny)
-library(shinythemes)
-library(shinycssloaders)
-library(networkD3)
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(grid)
-library(htmlwidgets)
-library(clusterProfiler)
-library(AnnotationHub)
-library(DESeq2)
-library(circlize)
-library(GenomicRanges)
-library(ComplexHeatmap)
+# List of required packages
+packages <- c("shiny", "shinythemes", "shinycssloaders", 
+              "networkD3", "dplyr", "tidyr", "ggplot2",
+              "grid", "htmlwidgets", "clusterProfiler", 
+              "AnnotationHub", "DESeq2")
 
+for(pkg in packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg)
+  }
+  library(pkg, character.only = TRUE)
+}
 
 source('functions_app2.R')
-
-libraries<-c('shiny','shinythemes','shinycssloaders','networkD3','dplyr',
-             'tidyr','ggplot2','grid','htmlwidgets','clusterProfiler','AnnotationHub',
-             'DESeq2')
 
 ui <- fluidPage(
   includeCSS("pf_styles.css"),
@@ -56,7 +48,7 @@ ui <- fluidPage(
                HTML(paste('<strong>Accession number:</strong> <a href="https://www.ebi.ac.uk/biostudies/arrayexpress/studies/E-MTAB-14167" target="_blank">E-MTAB-14167</a>','<br>')),
                HTML(paste("<strong>Format:</strong>",'.txt','<br>')),
                HTML(paste("<strong>Assay technology:</strong>",'RNA sequencing','<br>')),
-               HTML(paste("<strong>Sample Size:</strong> ",'92','<br>')),
+               HTML(paste("<strong>Sample Size:</strong> ",'91','<br>')),
                HTML(paste("<strong>Number of Observations:</strong> ", '62705','<br>')),
                HTML(paste('<strong>Reference Genome:</strong> <a href="https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000001405.40/" target="_blank">GRCh38.p14</a>','<br>')),
                HTML(paste('<strong>Sample Attributes:</strong> <a href="https://www.ebi.ac.uk/biostudies/arrayexpress/studies/E-MTAB-14167/sdrf" target="_blank">SDRF</a>','.txt','<br>')),
@@ -67,7 +59,7 @@ ui <- fluidPage(
       tags$div(style = "text-align: center",h5('R Libraries')),
       hr(),
       tags$ul(style = "list-style-type: none; padding-left: 0;", 
-              lapply(libraries, function(lib) {
+              lapply(packages, function(lib) {
                 tags$li(style = "display: inline-block; margin: 5px; text-align: center;",
                         tags$span(
                           style = "border-radius: 20%; background-color: var(--background-color); padding: 5px;",
