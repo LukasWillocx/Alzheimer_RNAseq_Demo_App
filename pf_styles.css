@@ -79,6 +79,15 @@ select, .shiny-input-container {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.custom-panel3 {
+  background-color: var(--panel-bg);
+  padding: 20px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  border: 2.5px solid var(--accent-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .well {
   background-color: var(--panel-bg) !important;
   border: 2px solid var(--border-color) !important;

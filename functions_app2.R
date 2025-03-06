@@ -141,3 +141,39 @@ DEA_volcano_plotter <- function(DEA_res){
     geom_vline(xintercept=c(-2, 2), linetype="dashed", color="#7aa6a1") + # Biological relevance lines
     scale_color_manual(values=c('TRUE'='#7aa6a1', 'FALSE'='black'))
 }
+
+
+
+
+
+PCA_samples_plot <-function(pca_result,meta_data,variable){
+  # Extract the principal components and their variances
+  pc_scores <- pca_result$x
+  pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+  
+  # Visualize the PCA results using a scatter plot
+  pc_scores_df <- as.data.frame(pc_scores)
+  colnames(pc_scores_df) <- paste0("PC", 1:ncol(pc_scores_df))
+  pc_scores_df$samples<-rownames(pc_scores_df)
+  pc_scores_df<-left_join(pc_scores_df,meta_data,by='samples')
+  
+  p <- ggplot(pc_scores_df, aes(x = PC1, y = PC2)) +
+    geom_point(aes_string(color=variable)) +
+    labs(x = paste0("PC1 (", round(pc_variance[1], 2), "% variance)"),
+         y = paste0("PC2 (", round(pc_variance[2], 2), "% variance)"))+
+    theme(
+      plot.background = element_rect(fill = "transparent", colour = NA),
+      panel.background = element_rect(fill = "transparent", colour = NA),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_line(color = "#BEBEBE"),
+      panel.grid.major.y = element_line(color = "#BEBEBE"),
+      legend.position='none',
+      axis.title = element_text(color = "#7aa6a1"),
+      axis.text = element_text(color = "#7aa6a1"),
+      )
+  
+ ggplotly(p)
+  
+}
+
+
