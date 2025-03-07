@@ -2,7 +2,7 @@
 packages <- c("shiny", "shinythemes", "shinycssloaders", 
               "networkD3", "dplyr", "tidyr", "ggplot2",
               "grid", "htmlwidgets", "clusterProfiler", 
-              "AnnotationHub", "DESeq2","plotly")
+              "AnnotationHub", "DESeq2","plotly", "DT")
 
 for(pkg in packages) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -38,6 +38,15 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       width = 3,
+      h4('Navigation - DGEA panel'),
+      selectInput("attribute", "Choose the sample attribute for DGEA",
+                  choices = c("Sex   (Female Vs Male)" = "sex", 
+                              "Genotype   (ApoE3,3 Vs ApoE4,4)" = "genotype", 
+                              "Disease   (Alzheimer's Vs none)" = "disease")),
+       
+      selectInput("tissue", "Choose tissue sampling location",
+                  choices = c("Cerebellum" = "cerebellum", 
+                              "Prefrontal cortex" = "prefrontal cortex")),
       tags$div(tags$div(style = "text-align: center",h4('Dataset Information'),
                         h5('Bulk RNA-seq of postmortem human prefrontal cortex and cerebellum brain tissues')),
                hr(),
@@ -100,49 +109,46 @@ ui <- fluidPage(
                                   withSpinner(plotlyOutput("PCA_samples_plot_sampling_location")))),
                  )
         ),
-        tabPanel("Cerebellum tissue analysis",
+        tabPanel("Differential Gene Expression Analysis (DGEA)",
                  fluidRow(
-                 column(4,div(class = "custom-panel",
-                                h3("Volcano plot - female Vs male"),
-                                withSpinner(plotOutput("DEA_sex_cerebellum")),
-                              p('Excererbated log2 Fold Changes when comparing Female vs Male. The central lump of genes that are neither biologically or statistically significantly diferentially expressed gets squashed
-                          toward the x axis. Insanely high -log10 adjusted p values are achieved by the unmistakable difference in some sex chromosome related gene titers.')),
+                 column(12,div(class = "custom-panel",
+                                h3("Volcano plot - identifying biologically and statistically relevant differential gene expression"),
+                                withSpinner(plotOutput("volcano_plot")),
                         ),
-                 column(4,div(class = "custom-panel",
-                                h3("Volcano plot - ApoE3,3 Vs ApoE4,4"),
-                                withSpinner(plotOutput("DEA_genotype_cerebellum")))
+                 ),
+                 column(7,div(class = "custom-panel",
+                               h3("Significant reads"),
+                              
+                              tags$head(
+                                tags$style(HTML("
+                                .shiny-input-container label,
+                                .shiny-output-container pre,
+                                .shiny-output-container code,
+                                .dataTables_wrapper,
+                                table.dataTable thead th,
+                                table.dataTable tbody td 
+                                {color: #7aa6a1}
+                              "))),
+                              
+                               withSpinner(dataTableOutput("signi_gene_table")),
                         ),
-                 column(4,div(class = "custom-panel",
-                                h3("Volcano plot - Alzheimer's Vs none"),
-                                withSpinner(plotOutput("DEA_disease_cerebellum")))
-                        ),
-                 )
-        ),
-                 
-        tabPanel("Prefrontal cortex tissue analysis",
-                 fluidRow(
-                   column(4,div(class = "custom-panel",
-                                h3("Volcano plot - female Vs male"),
-                                withSpinner(plotOutput("DEA_sex_pfc")))
-                          ),
-                   column(4,div(class = "custom-panel",
-                                h3("Volcano plot - ApoE3,3 Vs ApoE4,4"),
-                                withSpinner(plotOutput("DEA_genotype_pfc")))
-                          ),
-                   column(4,div(class = "custom-panel",
-                                h3("Volcano plot - Alzheimer's Vs none"),
-                                withSpinner(plotOutput("DEA_disease_pfc")))
-                          ),
-                 )
+                 ),
+                 column(5,div(class = "custom-panel",
+                               h3("Gene set enrichment analysis (GSEA)"),
+                               #withSpinner(plotOutput("volcano_plot")),
+                 ),
+                 ),
         ),
       )
     )
   )
 )
+)
 
 server <- function(input, output) {
   
   # loading prewritten data to reduce on the fly server calculations
+  # caching principal component analysis
   meta_data_sorted  <- read.csv('meta_data_sorted.csv')
   rownames(meta_data_sorted)<-meta_data_sorted$samples
   
@@ -163,49 +169,12 @@ server <- function(input, output) {
   DEA_disease_cerebellum_data<-read.csv('DEA_disease_results_in_cerebellum.csv')
   DEA_disease_pfc_data<-read.csv('DEA_disease_results_in_pfc.csv')
   
-  
+  # Overview panel (top)
   output$sankey<-renderSankeyNetwork({
     sankey_design(meta_data_sorted)
   })
-  #sex
-  output$DEA_sex_cerebellum<-renderPlot({
-    DEA_volcano_plotter(DEA_sex_cerebellum_data)+
-      geom_label(aes(label = ifelse(stat_sign, Chr, NA),color=stat_sign),fill='#f0d09f')+
-      scale_x_continuous(limits = c(-11, 11))
-  },bg='transparent')
   
-  output$DEA_sex_pfc<-renderPlot({
-    DEA_volcano_plotter(DEA_sex_pfc_data)+
-      geom_label(aes(label = ifelse(stat_sign, Chr, NA),color=stat_sign),fill='#f0d09f')+
-      scale_x_continuous(limits = c(-11, 11))
-  },bg='transparent')
-  
-  #genotype
-  output$DEA_genotype_cerebellum<-renderPlot({
-    DEA_volcano_plotter(DEA_genotype_cerebellum_data)+
-      geom_label(aes(label = ifelse(stat_sign, Chr, NA),color=stat_sign),fill='#f0d09f')+
-      scale_x_continuous(limits = c(-6, 6))
-  },bg='transparent')
-  
-  output$DEA_genotype_pfc<-renderPlot({
-    DEA_volcano_plotter(DEA_genotype_pfc_data)+
-      geom_label(aes(label = ifelse(stat_sign, Chr, NA),color=stat_sign),fill='#f0d09f')+
-      scale_x_continuous(limits = c(-6, 6))
-  },bg='transparent')
-  
-  #disease
-  output$DEA_disease_cerebellum<-renderPlot({
-    DEA_volcano_plotter(DEA_disease_cerebellum_data)+
-      geom_label(aes(label = ifelse(stat_sign, Chr, NA),color=stat_sign),fill='#f0d09f')+
-      scale_x_continuous(limits = c(-5, 5))
-  },bg='transparent')
-  
-  output$DEA_disease_pfc<-renderPlot({
-    DEA_volcano_plotter(DEA_disease_pfc_data)+
-      geom_label(aes(label = ifelse(stat_sign, Chr, NA),color=stat_sign),fill='#f0d09f')+
-      scale_x_continuous(limits = c(-5, 5))
-  },bg='transparent')
-  
+  # Overview panel (bottom)
   output$PCA_samples_plot_sex<-renderPlotly({
     p<-PCA_samples_plot(pca_result,meta_data_sorted,'sex')
     p
@@ -221,6 +190,40 @@ server <- function(input, output) {
   output$PCA_samples_plot_sampling_location<-renderPlotly({
     p<-PCA_samples_plot(pca_result,meta_data_sorted,'sampling_location')
     ggplotly(p)
+  })
+  
+  # DGEA panel top
+  select_DEA_data <- reactive({
+    attribute <- input$attribute
+    tissue <- input$tissue
+    
+    if (attribute == "sex") {
+      if (tissue == "cerebellum") {
+        return(DEA_sex_cerebellum_data)
+      } else if (tissue == "prefrontal cortex") {
+        return(DEA_sex_pfc_data)
+      }
+    } else if (attribute == "genotype") {
+      if (tissue == "cerebellum") {
+        return(DEA_genotype_cerebellum_data)
+      } else if (tissue == "prefrontal cortex") {
+        return(DEA_genotype_pfc_data)
+      }
+    } else if (attribute == "disease") {
+      if (tissue == "cerebellum") {
+        return(DEA_disease_cerebellum_data)
+      } else if (tissue == "prefrontal cortex") {
+        return(DEA_disease_pfc_data)
+      }
+    }
+  })
+  
+  output$volcano_plot <- renderPlot({
+    DEA_volcano_plotter(select_DEA_data())
+  },bg='transparent')
+  
+  output$signi_gene_table <- renderDataTable({
+    DEA_signi_tabulator(select_DEA_data())
   })
 }
 

@@ -1,6 +1,5 @@
 
 sankey_design<-function(df){
-
   df <- df %>%
     mutate(age_group = cut(age,
                            breaks = c(60, 70, 80, 90, 100),
@@ -124,28 +123,6 @@ sankey_design<-function(df){
   htmltools::browsable(customSankey)
 }
 
-DEA_volcano_plotter <- function(DEA_res){
-  ggplot(as.data.frame(DEA_res), aes(x=log2FoldChange, y=-log10(padj))) +
-    geom_point(aes(color=stat_sign), alpha=0.7) +
-    theme_minimal() +
-    theme(legend.position = 'None',
-          plot.background = element_rect(fill = "transparent", colour = NA),
-          panel.background = element_rect(fill = "transparent", colour = NA),
-          panel.grid.minor = element_blank(),
-          panel.grid.major.x = element_line(color = "#BEBEBE"),
-          panel.grid.major.y = element_line(color = "#BEBEBE"),
-          axis.title = element_text(color = "#7aa6a1"),
-          axis.text = element_text(color = "#7aa6a1")) +
-    labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value") +
-    geom_hline(yintercept = -log10(0.05), linetype="dashed", color="#7aa6a1") + # Statistical significance
-    geom_vline(xintercept=c(-2, 2), linetype="dashed", color="#7aa6a1") + # Biological relevance lines
-    scale_color_manual(values=c('TRUE'='#7aa6a1', 'FALSE'='black'))
-}
-
-
-
-
-
 PCA_samples_plot <-function(pca_result,meta_data,variable){
   # Extract the principal components and their variances
   pc_scores <- pca_result$x
@@ -170,10 +147,42 @@ PCA_samples_plot <-function(pca_result,meta_data,variable){
       legend.position='none',
       axis.title = element_text(color = "#7aa6a1"),
       axis.text = element_text(color = "#7aa6a1"),
-      )
+    )
   
- ggplotly(p)
-  
+  ggplotly(p)
 }
+
+
+DEA_volcano_plotter <- function(DEA_res){
+  ggplot(as.data.frame(DEA_res), aes(x=log2FoldChange, y=-log10(padj))) +
+    geom_point(aes(color=stat_sign&bio_sign), alpha=0.7,size=2) +
+    theme_minimal() +
+    theme(legend.position = 'None',
+          plot.background = element_rect(fill = "transparent", colour = NA),
+          panel.background = element_rect(fill = "transparent", colour = NA),
+          panel.grid.minor = element_blank(),
+          panel.grid.major.x = element_line(color = "#BEBEBE"),
+          panel.grid.major.y = element_line(color = "#BEBEBE"),
+          axis.title = element_text(color = "#7aa6a1"),
+          axis.text = element_text(color = "#7aa6a1")) +
+    labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value") +
+    geom_hline(yintercept = -log10(0.05), linetype="dashed", color="#7aa6a1") + # Statistical significance
+    geom_vline(xintercept=c(-2, 2), linetype="dashed", color="#7aa6a1") + # Biological relevance lines
+    scale_color_manual(values=c('TRUE'='#7aa6a1', 'FALSE'='black'))
+}
+
+DEA_signi_tabulator <- function(DEA_res){
+  signi_genes <- DEA_res%>%
+    filter(padj < 0.05 & abs(log2FoldChange) > 2) %>%
+    select(c(ENSEMBL,Chr,log2FoldChange,padj))%>%
+    arrange(padj)
+  datatable(signi_genes) %>% 
+    formatStyle(columns = names(signi_genes), color = "#7aa6a1") # Change 'blue' to your desired color
+}
+
+
+
+
+
 
 
