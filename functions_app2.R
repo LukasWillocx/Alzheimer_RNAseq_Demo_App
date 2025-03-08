@@ -226,9 +226,3 @@ GOE_plotter <- function(signi_genes, GOE_data){
     scale_y_continuous(breaks = seq(0, max(GOE_data$Count, na.rm = TRUE), by = 1))  # Set y-axis breaks
   }
 }
-
-
-
-
-
-

@@ -138,10 +138,10 @@ ui <- fluidPage(
 server <- function(input, output) {
   
   # loading pre-written data to reduce on the fly server calculations
-  meta_data_sorted  <- read.csv('meta_data_sorted.csv')
+  meta_data_sorted  <- read.csv('data/meta_data_sorted.csv')
   rownames(meta_data_sorted)<-meta_data_sorted$samples
   
-  read_counts_clean <- read.csv('read_counts_clean.csv')
+  read_counts_clean <- read.csv('data/read_counts_clean.csv')
   rownames(read_counts_clean) <- read_counts_clean$X
   read_counts_clean<-read_counts_clean %>%
     dplyr::select(-X)
@@ -151,26 +151,26 @@ server <- function(input, output) {
   pca_result <<- prcomp(rnaseq_data)
   
   # pre-written DEA results from the resource intensive DESeq2 function
-  DEA_sex_cerebellum_data<-read.csv('DEA_sex_results_in_cerebellum.csv')
-  DEA_sex_pfc_data<-read.csv('DEA_sex_results_in_pfc.csv')
+  DEA_sex_cerebellum_data<-read.csv('data/DEA_sex_results_in_cerebellum.csv')
+  DEA_sex_pfc_data<-read.csv('data/DEA_sex_results_in_pfc.csv')
   
-  DEA_genotype_cerebellum_data<-read.csv('DEA_genotype_results_in_cerebellum.csv')
-  DEA_genotype_pfc_data<-read.csv('DEA_genotype_results_in_pfc.csv')
+  DEA_genotype_cerebellum_data<-read.csv('data/DEA_genotype_results_in_cerebellum.csv')
+  DEA_genotype_pfc_data<-read.csv('data/DEA_genotype_results_in_pfc.csv')
   
-  DEA_disease_cerebellum_data<-read.csv('DEA_disease_results_in_cerebellum.csv')
-  DEA_disease_pfc_data<-read.csv('DEA_disease_results_in_pfc.csv')
+  DEA_disease_cerebellum_data<-read.csv('data/DEA_disease_results_in_cerebellum.csv')
+  DEA_disease_pfc_data<-read.csv('data/DEA_disease_results_in_pfc.csv')
   
   # pre-written GOE results from the resource intensive enrichGO function
-  GOE_disease_cerebellum <- read.csv('GOE_disease_cerebellum.csv')
-  GOE_disease_pfc <- read.csv('GOE_disease_pfc.csv')
+  GOE_disease_cerebellum <- read.csv('data/GOE_disease_cerebellum.csv')
+  GOE_disease_pfc <- read.csv('data/GOE_disease_pfc.csv')
   
-  GOE_sex_cerebellum <- read.csv('GOE_sex_cerebellum.csv')
-  GOE_sex_pfc <- read.csv('GOE_sex_pfc.csv')
+  GOE_sex_cerebellum <- read.csv('data/GOE_sex_cerebellum.csv')
+  GOE_sex_pfc <- read.csv('data/GOE_sex_pfc.csv')
   
-  GOE_genotype_cerebellum <- read.csv('GOE_genotype_cerebellum.csv')
+  GOE_genotype_cerebellum <- read.csv('data/GOE_genotype_cerebellum.csv')
   
   # load the dataframe that converts ENSEMBL ids to Entrez ids (fetch takes 3 minutes otherwise)
-  entrez_mapping<-read.csv('entrez_mapping.csv') 
+  entrez_mapping<-read.csv('data/entrez_mapping.csv') 
   entrez_mapping<-rename(entrez_mapping,ENSEMBL=ensembl_gene_id)
   
   # Overview panel (top)
