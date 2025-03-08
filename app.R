@@ -1,8 +1,9 @@
 # List of required packages
 packages <- c("shiny", "shinythemes", "shinycssloaders", 
               "networkD3", "dplyr", "tidyr", "ggplot2",
-              "grid", "htmlwidgets", "clusterProfiler", 
-              "AnnotationHub", "DESeq2","plotly", "DT")
+              "grid", "htmlwidgets","AnnotationHub", "DESeq2","plotly", "DT",
+              "clusterProfiler", "org.Hs.eg.db", "AnnotationDbi","biomaRt",
+              "stringr")
 
 for(pkg in packages) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -90,7 +91,7 @@ ui <- fluidPage(
                                   p('The principal component space entails the dimensional reduction of the 62705 distinct RNASeq reads in the data set. The first two
                                   principal components comprise nearly 97% of the variance observed in the data. Upon closer inspection it can be argued that the separation along principal component 2 quite neatly
                                   represents the biological difference between the two sampling tissues of cerebellum and prefrontal cortex. None of the other attributes show
-                                  clear separation along principal component 1. 
+                                  clear separation along either principal component. 
                                     ')
                                   )),
                  ),
@@ -112,30 +113,19 @@ ui <- fluidPage(
         tabPanel("Differential Gene Expression Analysis (DGEA)",
                  fluidRow(
                  column(12,div(class = "custom-panel",
-                                h3("Volcano plot - identifying biologically and statistically relevant differential gene expression"),
+                                h3("Volcano plot - identifying biologically (|log2 FoldChange| > 2) and statistically (p.adj < 0.05) relevant differential gene expression"),
                                 withSpinner(plotOutput("volcano_plot")),
                         ),
-                 ),
+                 )),
+                 fluidRow(
                  column(7,div(class = "custom-panel",
-                               h3("Significant reads"),
-                              
-                              tags$head(
-                                tags$style(HTML("
-                                .shiny-input-container label,
-                                .shiny-output-container pre,
-                                .shiny-output-container code,
-                                .dataTables_wrapper,
-                                table.dataTable thead th,
-                                table.dataTable tbody td 
-                                {color: #7aa6a1}
-                              "))),
-                              
+                               h3("Significantly differentially expressed genes"),
                                withSpinner(dataTableOutput("signi_gene_table")),
                         ),
                  ),
                  column(5,div(class = "custom-panel",
-                               h3("Gene set enrichment analysis (GSEA)"),
-                               #withSpinner(plotOutput("volcano_plot")),
+                               h3("Gene ontology enrichment"),
+                               withSpinner(uiOutput("GOE_plot_or_message")),
                  ),
                  ),
         ),
@@ -147,19 +137,20 @@ ui <- fluidPage(
 
 server <- function(input, output) {
   
-  # loading prewritten data to reduce on the fly server calculations
-  # caching principal component analysis
+  # loading pre-written data to reduce on the fly server calculations
   meta_data_sorted  <- read.csv('meta_data_sorted.csv')
   rownames(meta_data_sorted)<-meta_data_sorted$samples
   
   read_counts_clean <- read.csv('read_counts_clean.csv')
   rownames(read_counts_clean) <- read_counts_clean$X
   read_counts_clean<-read_counts_clean %>%
-    select(-X)
+    dplyr::select(-X)
   rnaseq_data<-t(read_counts_clean)
   
+  # caching principal component analysis
   pca_result <<- prcomp(rnaseq_data)
   
+  # pre-written DEA results from the resource intensive DESeq2 function
   DEA_sex_cerebellum_data<-read.csv('DEA_sex_results_in_cerebellum.csv')
   DEA_sex_pfc_data<-read.csv('DEA_sex_results_in_pfc.csv')
   
@@ -169,6 +160,19 @@ server <- function(input, output) {
   DEA_disease_cerebellum_data<-read.csv('DEA_disease_results_in_cerebellum.csv')
   DEA_disease_pfc_data<-read.csv('DEA_disease_results_in_pfc.csv')
   
+  # pre-written GOE results from the resource intensive enrichGO function
+  GOE_disease_cerebellum <- read.csv('GOE_disease_cerebellum.csv')
+  GOE_disease_pfc <- read.csv('GOE_disease_pfc.csv')
+  
+  GOE_sex_cerebellum <- read.csv('GOE_sex_cerebellum.csv')
+  GOE_sex_pfc <- read.csv('GOE_sex_pfc.csv')
+  
+  GOE_genotype_cerebellum <- read.csv('GOE_genotype_cerebellum.csv')
+  
+  # load the dataframe that converts ENSEMBL ids to Entrez ids (fetch takes 3 minutes otherwise)
+  entrez_mapping<-read.csv('entrez_mapping.csv') 
+  entrez_mapping<-rename(entrez_mapping,ENSEMBL=ensembl_gene_id)
+  
   # Overview panel (top)
   output$sankey<-renderSankeyNetwork({
     sankey_design(meta_data_sorted)
@@ -176,24 +180,21 @@ server <- function(input, output) {
   
   # Overview panel (bottom)
   output$PCA_samples_plot_sex<-renderPlotly({
-    p<-PCA_samples_plot(pca_result,meta_data_sorted,'sex')
-    p
+    PCA_samples_plot(pca_result,meta_data_sorted,'sex')
   })
   output$PCA_samples_plot_genotype<-renderPlotly({
-    p<-PCA_samples_plot(pca_result,meta_data_sorted,'genotype')
-    ggplotly(p)
+    PCA_samples_plot(pca_result,meta_data_sorted,'genotype')
   })
   output$PCA_samples_plot_disease<-renderPlotly({
-    p<-PCA_samples_plot(pca_result,meta_data_sorted,'disease')
-    ggplotly(p)
+    PCA_samples_plot(pca_result,meta_data_sorted,'disease')
   })
   output$PCA_samples_plot_sampling_location<-renderPlotly({
-    p<-PCA_samples_plot(pca_result,meta_data_sorted,'sampling_location')
-    ggplotly(p)
+    PCA_samples_plot(pca_result,meta_data_sorted,'sampling_location')
   })
   
   # DGEA panel top
   select_DEA_data <- reactive({
+    
     attribute <- input$attribute
     tissue <- input$tissue
     
@@ -218,12 +219,66 @@ server <- function(input, output) {
     }
   })
   
+  select_GOE_data <- reactive({
+    
+    attribute <- input$attribute
+    tissue <- input$tissue
+    
+    if (attribute == "sex") {
+      if (tissue == "cerebellum") {
+        return(GOE_sex_cerebellum)
+      } else if (tissue == "prefrontal cortex") {
+        return(GOE_sex_pfc)
+      }
+    } else if (attribute == "genotype") {
+      if (tissue == "cerebellum") {
+        return(GOE_genotype_cerebellum)
+      } else if (tissue == "prefrontal cortex") {
+        return(0)
+      }
+    } else if (attribute == "disease") {
+      if (tissue == "cerebellum") {
+        return(GOE_disease_cerebellum)
+      } else if (tissue == "prefrontal cortex") {
+        return(GOE_disease_pfc)
+      }
+    }
+  })
+  
   output$volcano_plot <- renderPlot({
     DEA_volcano_plotter(select_DEA_data())
   },bg='transparent')
   
+  select_signi_genes <- reactive ({
+    select_DEA_data()%>%
+      filter(padj < 0.05 & abs(log2FoldChange)>2)%>%
+      dplyr::select(c(ENSEMBL,Chr,log2FoldChange,padj))%>%
+      arrange(padj) %>%
+      left_join(entrez_mapping,by='ENSEMBL')
+  })
+  
   output$signi_gene_table <- renderDataTable({
-    DEA_signi_tabulator(select_DEA_data())
+    datatable(select_signi_genes()) %>% 
+      formatStyle(columns = names(select_signi_genes()), color = "#7aa6a1") # Change 'blue' to your desired color
+  })
+  
+  # Outputting the gene ontology bar graphs (conditional on there being enough significant genes)
+  output$GOE_plot_or_message <- renderUI({
+    if (nrow(select_signi_genes()) < 10) {
+      textOutput("GOE_message")
+    } else {
+      plotlyOutput("GOE_plot")
+    }
+  })
+  
+  output$GOE_message <- renderText ({
+    "Insufficient amount of significant genes present for Gene Ontology Enrichment.
+    The minmal amount of siginificant genes is internally set at ten. \n Choose another combination of attribute or tissue.
+    All cerebellum analyses should yield results."
+  })
+  
+  output$GOE_plot <- renderPlotly({
+    GOE_plotter(select_signi_genes(),select_GOE_data())
   })
 }
 
