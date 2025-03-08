@@ -1,0 +1,11 @@
+"","ONTOLOGY","ID","Description","GeneRatio","BgRatio","pvalue","p.adjust","qvalue","geneID","Count"
+"GO:0005786","CC","GO:0005786","signal recognition particle, endoplasmic reticulum targeting","1/1","16/19886",0.000804586141003649,0.000804586141003649,NA,"RN7SL1",1
+"GO:0048500","CC","GO:0048500","signal recognition particle","1/1","16/19886",0.000804586141003649,0.000804586141003649,NA,"RN7SL1",1
+"GO:0006617","BP","GO:0006617","SRP-dependent cotranslational protein targeting to membrane, signal sequence recognition","1/1","14/18870",0.000741918388977081,0.00540540540540513,NA,"RN7SL1",1
+"GO:0006614","BP","GO:0006614","SRP-dependent cotranslational protein targeting to membrane","1/1","27/18870",0.00143084260731297,0.00540540540540513,NA,"RN7SL1",1
+"GO:0006613","BP","GO:0006613","cotranslational protein targeting to membrane","1/1","32/18870",0.00169581346051906,0.00540540540540513,NA,"RN7SL1",1
+"GO:0045047","BP","GO:0045047","protein targeting to ER","1/1","47/18870",0.00249072602013778,0.00540540540540513,NA,"RN7SL1",1
+"GO:0072599","BP","GO:0072599","establishment of protein localization to endoplasmic reticulum","1/1","51/18870",0.00270270270270256,0.00540540540540513,NA,"RN7SL1",1
+"GO:0070972","BP","GO:0070972","protein localization to endoplasmic reticulum","1/1","79/18870",0.00418653948065706,0.0069775658010951,NA,"RN7SL1",1
+"GO:0006612","BP","GO:0006612","protein targeting to membrane","1/1","135/18870",0.00715421303656594,0.0102203043379513,NA,"RN7SL1",1
+"GO:0090150","BP","GO:0090150","establishment of protein localization to membrane","1/1","280/18870",0.0148383677795442,0.0185479597244302,NA,"RN7SL1",1
