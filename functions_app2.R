@@ -171,15 +171,61 @@ DEA_volcano_plotter <- function(DEA_res){
     scale_color_manual(values=c('TRUE'='#7aa6a1', 'FALSE'='black'))
 }
 
-DEA_signi_tabulator <- function(DEA_res){
-  signi_genes <- DEA_res%>%
-    filter(padj < 0.05 & abs(log2FoldChange) > 2) %>%
-    select(c(ENSEMBL,Chr,log2FoldChange,padj))%>%
-    arrange(padj)
-  datatable(signi_genes) %>% 
-    formatStyle(columns = names(signi_genes), color = "#7aa6a1") # Change 'blue' to your desired color
+go_enrich<-function(DEA_data){
+  
+ signi_genes<-DEA_data%>%
+    filter(padj < 0.05 & abs(log2FoldChange)>2)%>%
+    dplyr::select(c(ENSEMBL,Chr,log2FoldChange,padj))%>%
+    arrange(padj) %>%
+    left_join(entrez_mapping,by='ENSEMBL')
+  
+  entrez_genes <- signi_genes[!is.na(signi_genes$entrezgene_id),]
+  ego <- enrichGO(
+    gene = entrez_genes$entrezgene_id,
+    OrgDb = org.Hs.eg.db,
+    ont = "ALL",  # Biological Process; can also use "CC" (Cellular Component) or "MF" (Molecular Function)
+    pAdjustMethod = "BH",
+    qvalueCutoff = 0.05,
+    readable = TRUE
+  )
+  ego_df <- as.data.frame(ego) %>%
+    arrange(desc(Count),p.adjust) 
+  
+  ego_df <- ego_df[1:10,]
 }
 
+GOE_plotter <- function(signi_genes, GOE_data){
+  if (nrow(signi_genes)<15){
+    stop()
+  } else {
+    
+  # Wrap descriptions to span across multiple lines if necessary (GOs tend to be quite long)
+  GOE_data$Description <- str_wrap(GOE_data$Description, width = 40)
+  
+  # Create the ggplot
+  p <- ggplot(GOE_data, aes(x=reorder(Description,Count), y = Count)) +
+    geom_bar(stat = "identity", aes(fill = Count),width=0.7) +  # Map fill to Count
+    scale_fill_viridis_c(option = "C") +  # Use a color gradient for fill
+    theme_minimal() +
+    coord_flip()+
+    labs(
+      title = "",
+      x = "",
+      y = "Gene count in ontology"
+    ) +
+    theme(
+      plot.background = element_rect(fill = "transparent", colour = NA),
+      panel.background = element_rect(fill = "transparent", colour = NA),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_line(color = "#BEBEBE"),
+      panel.grid.major.y = element_line(color = "#BEBEBE"),
+      legend.position='none',
+      axis.title = element_text(color = "#7aa6a1"),
+      axis.text = element_text(color = "#7aa6a1"),
+    )+
+    scale_y_continuous(breaks = seq(0, max(GOE_data$Count, na.rm = TRUE), by = 1))  # Set y-axis breaks
+  }
+}
 
 
 
