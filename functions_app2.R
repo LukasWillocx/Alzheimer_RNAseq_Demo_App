@@ -155,7 +155,7 @@ PCA_samples_plot <-function(pca_result,meta_data,variable){
 
 DEA_volcano_plotter <- function(DEA_res){
   ggplot(as.data.frame(DEA_res), aes(x=log2FoldChange, y=-log10(padj))) +
-    geom_point(aes(color=stat_sign&bio_sign), alpha=0.7,size=2) +
+    geom_point(aes(color=stat_sign&bio_sign), alpha=0.55,size=3) +
     theme_minimal() +
     theme(legend.position = 'None',
           plot.background = element_rect(fill = "transparent", colour = NA),
