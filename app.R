@@ -89,7 +89,8 @@ ui <- fluidPage(
                  fluidRow(
                    column(12, div(class = "custom-panel",
                                  h3("Sample attributes"),
-                                 withSpinner(sankeyNetworkOutput("sankey",width='100%',height='500px')))),
+                                 tags$div(style = "width: 100%; height: 100%;",
+                                 withSpinner(sankeyNetworkOutput("sankey",width='100%',height='500px'))))),
                  ),
                  fluidRow(
                    column(12, div(class = "custom-panel",
