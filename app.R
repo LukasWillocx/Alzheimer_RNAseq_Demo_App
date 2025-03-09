@@ -24,7 +24,7 @@ ui <- fluidPage(
   ")),
   
   titlePanel(
-    div("Data Science Portfolio", 
+    div("RNASeq analysis", 
         style = "display: flex; justify-content: space-between; align-items: center;",
         tags$button(
           id = "themeToggle",
@@ -78,7 +78,12 @@ ui <- fluidPage(
         Differential gene expression is scrutinized, based on sample attributes. These are sex, genotype and disease status. The former is particularly interesting to evaluate whether the
         analysis is sound. In a comparison between male and female, a vast difference in expression at the level of the sex chromosomes should become apparent. In the other application it was
         outlined that the apolipoprotein E4 (ApoE4) allele was a risk factor for Alzheimer\'s disease. The comparison of a homozygous risk factor group vs a homozygous wild-type group is therefore
-        an interesting consideration. It was opted to not pool samples from both tissues, as this could introduce biological tissue variance, which is outlined by the principal component analysis.')
+        an interesting consideration. It was opted to not pool samples from both tissues, as this could introduce biological tissue variance, which is outlined by the principal component analysis.'),
+      hr(),
+      tags$div(style = "text-align: center",h5('Known issues')),
+      hr(),
+      p('The Sankey diagram in the Overview panel currently doesn\'t scale appropriately to the full size of the box in a firefox browser.
+        Chromium-based browsers should display everything as intended.')
     ),
     
     mainPanel(
