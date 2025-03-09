@@ -63,7 +63,8 @@ sankey_design<-function(df){
     nodeWidth = 25,
     nodePadding = 10,
     sinksRight = T,
-    iterations = 5
+    iterations = 5,
+    width='100%'
     )
   
   
