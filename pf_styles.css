@@ -147,7 +147,8 @@ table.display.dataTable > tbody > tr.selected:hover > *  {
 
 /* Fix for Firefox flex rendering */
 html, body, #sankey, .html-widget {
-  min-height: 100vh !important;
+  min-height: 20vh !important;
+  min-width: 100% !important;
   flex: 1 1 auto !important;
   display: flex !important;
 }
