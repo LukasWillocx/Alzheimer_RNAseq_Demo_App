@@ -138,14 +138,14 @@ table.display.dataTable > tbody > tr.selected:hover > *  {
     box-shadow: inset 0 0 0 9999px #f0c8a8 !important;
 }
 
+/* Parent container hierarchy */
+html, body, .shiny-page-wrapper, .html-widget {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
 #sankey {
-  contain: strict; /* Prevent layout shifts */
-  aspect-ratio: 16/9; /* Optional: Set aspect ratio */
+  flex: 1 1 auto !important;
+  min-height: 0 !important; /* Critical for Firefox flex */
 }
-
-#sankey svg {
-  width: 100%;
-  height: 100%;
-  vector-effect: non-scaling-stroke; /* Keep paths crisp */
-}
-
