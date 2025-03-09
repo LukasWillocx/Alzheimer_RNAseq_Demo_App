@@ -140,12 +140,12 @@ table.display.dataTable > tbody > tr.selected:hover > *  {
 
 /* Parent container hierarchy */
 html, body, .shiny-page-wrapper, .html-widget {
-  height: 100% !important;
+  width: 100% !important;
   display: flex !important;
   flex-direction: column !important;
 }
 
 #sankey {
   flex: 1 1 auto !important;
-  min-height: 0 !important; /* Critical for Firefox flex */
+  min-height: 35vh !important; /* Critical for Firefox flex */
 }
