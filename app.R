@@ -48,6 +48,7 @@ ui <- fluidPage(
       selectInput("tissue", "Choose tissue sampling location",
                   choices = c("Cerebellum" = "cerebellum", 
                               "Prefrontal cortex" = "prefrontal cortex")),
+      hr(),
       tags$div(tags$div(style = "text-align: center",h4('Dataset Information'),
                         h5('Bulk RNA-seq of postmortem human prefrontal cortex and cerebellum brain tissues')),
                hr(),
@@ -73,6 +74,11 @@ ui <- fluidPage(
       hr(),
       tags$div(style = "text-align: center",h5('About the application')),
       hr(),
+      p('This application concerns a demo, featuring a simple RNASeq analysis. The dataset consists of bulk RNASeq of postmortem human prefrontal cortex and cerebellum brain tissues.
+        Differential gene expression is scrutinized, based on sample attributes. These are sex, genotype and disease status. The former is particularly interesting to evaluate whether the
+        analysis is sound. In a comparison between male and female, a vast difference in expression at the level of the sex chromosomes should become apparent. In the other application it was
+        outlined that the apolipoprotein E4 (ApoE4) allele was a risk factor for Alzheimer\'s disease. The comparison of a homozygous risk factor group vs a homozygous wild-type group is therefore
+        an interesting consideration. It was opted to not pool samples from both tissues, as this could introduce biological tissue variance, which is outlined by the principal component analysis.')
     ),
     
     mainPanel(
@@ -83,7 +89,7 @@ ui <- fluidPage(
                  fluidRow(
                    column(12, div(class = "custom-panel",
                                  h3("Sample attributes"),
-                                 withSpinner(sankeyNetworkOutput("sankey")))),
+                                 withSpinner(sankeyNetworkOutput("sankey",width='100%',height='400px')))),
                  ),
                  fluidRow(
                    column(12, div(class = "custom-panel",
@@ -130,10 +136,10 @@ ui <- fluidPage(
                  ),
         ),
       ),
-      tabPanel('data exploration and preparation (.Rmd)',
+      tabPanel('EDA code',
                includeMarkdown('www/ApoE.Rmd'),
     ),
-      tabPanel('app functions',
+      tabPanel('Functions code',
                includeMarkdown('www/app_functions.Rmd'),
       )
   )
