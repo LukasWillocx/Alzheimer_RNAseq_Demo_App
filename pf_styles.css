@@ -147,5 +147,6 @@ html, body, .shiny-page-wrapper, .html-widget {
 
 #sankey {
   flex: 1 1 auto !important;
-  min-height: 35vh !important; /* Critical for Firefox flex */
+  min-height: 40vh !important;
+  min-width: 100% !important; /* Critical for Firefox flex */
 }
