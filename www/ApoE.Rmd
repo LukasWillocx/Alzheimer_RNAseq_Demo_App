@@ -1,0 +1,404 @@
+---
+title: "Alzheimer ApoE genotypes"
+author: "Lukas"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Libraries 
+
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(clusterProfiler)
+library(AnnotationHub)
+library(biomaRt)
+```
+
+## Reading the counts data 
+
+```{r}
+read_counts <- read.table(
+  "ApoE-iron_readcounts.txt", header = TRUE, sep = "\t", row.names = 1)
+
+# headers are in the first row of the dataframe
+actual_headers <- read_counts[1, ]
+
+# rename the column headers, remove "Aligned.sortedByCoord.out.bam" from all sample names
+colnames(read_counts) <- gsub('_.*', '', actual_headers)
+
+# remove first row that's been assigned to the header
+read_counts<-read_counts[-1,]
+```
+
+## Reading the Sample and Data Relationship format (SDRF)
+
+This file is required to link the non-descriptive sample IDs, provided in the read_counts data with relevant information on the subjects. These include **disease status**, **age**, **sex**, **genotype** and **sampling location**.
+
+```{r}
+sdrf <- read.table(
+  "E-MTAB-14167.sdrf.txt",
+  header = TRUE,
+  sep = "\t", 
+  quote = "",  
+  stringsAsFactors = FALSE,
+  comment.char = ""  
+)
+
+# extract useful variables and store as meta_data
+meta_data<-sdrf %>%
+  dplyr::select(c(Scan.Name,  # specifically choose dplyr's select (conflict with human genome .db)
+           Factor.Value.disease.,
+           Factor.Value.sex.,
+           Characteristics.age.,
+           Characteristics.genotype.,
+           Characteristics.organism.part.)) %>%
+  mutate(Scan.Name=gsub('_.*', '', Scan.Name)) %>% #simplifying ids 
+  group_by(Scan.Name) %>%
+  dplyr::filter(row_number()==1) %>%#filter duplicate entries
+  arrange(Scan.Name) 
+
+
+# renaming variables for legibility
+meta_data <- meta_data%>%
+  rename(samples=Scan.Name,
+         disease=Factor.Value.disease.,
+         sex= Factor.Value.sex.,
+         age= Characteristics.age.,
+         genotype=Characteristics.genotype.,
+         sampling_location =Characteristics.organism.part.)
+
+# set sample ids as row names (these need to match col names of read_counts) 
+# reassigned again later, dplyr operations tend to remove row names occasionally
+rownames(meta_data)<-meta_data$samples
+```
+
+### Ensuring the sample ids are consistent across both dataframes
+
+```{r}
+perc_match<-sum(rownames(meta_data) %in% colnames(read_counts)) / length(rownames(meta_data)) * 100
+cat('The matched percentage is:',perc_match)
+```
+
+### Figuring out the mismatch(es)
+```{r}
+rownames(meta_data)[!(rownames(meta_data) %in% colnames(read_counts))]
+```
+
+```{r}
+colnames(read_counts)[!(colnames(read_counts) %in% rownames(meta_data))]
+```
+
+Id R54 is not present in the counts data, whereas R52 is not present in the metadata, remove them from each others data frame for a complete match in sample ids across both. Since the data has already been preprocessed it's speculative where this information was lost. 
+
+```{r}
+read_counts<-read_counts %>%
+  dplyr::select(-R52)
+
+meta_data<-meta_data[!rownames(meta_data) %in% "R54", ]
+
+# reassign rownames, apparently some dplyr operations remove them 
+rownames(meta_data)<-meta_data$samples
+```
+
+### Removal of excess columns in read_counts
+
+The upcoming function *DESeqDataSetFromMatrix()* expects an equal number of rows compared to columns in the meta data and counts data respectively. The counts data, *read_counts*, is currently larger as its first variables denote chromosomal location data of the genes. These are the variables that will be removed :
+
+```{r}
+colnames(read_counts)[!(colnames(read_counts) %in% rownames(meta_data))]
+```
+
+```{r}
+read_counts_clean<- read_counts[,(colnames(read_counts) %in% rownames(meta_data))]
+```
+
+
+```{r}
+nrow(meta_data) == ncol(read_counts_clean)
+```
+### Match the order sample ids
+
+The names in the columns of *read_counts_clean* and rownames in *meta_data* are perfectly matched, however not quite in the same order. the *meta_data* will be sorted to match *read_counts_clean*.
+```{r}
+# Extract column names from dataframe read_counts_clean
+names_rcc <- colnames(read_counts_clean)
+
+# Find their positions in the row names of dataframe meta_data
+index <- match(names_rcc, rownames(meta_data))
+
+# Reorder dataframe meta_data based on the index obtained
+meta_data_sorted <- meta_data[index, , drop = FALSE]
+rownames(meta_data_sorted) <- meta_data_sorted$samples
+```
+
+
+### Turn read counts into numeric values
+
+The read counts are still encoded as class *character*. These need to be numeric. Negative values are absent, but this was to be expected given the data was preprocessed. Apparently 185 NA values were retrieved, these were set to 0. 
+
+```{r}
+read_counts_clean <- read_counts_clean%>% 
+  mutate(across(where(is.character), as.numeric))
+
+sum(read_counts_clean<0)
+sum(is.na(read_counts_clean))
+read_counts_clean <- replace(read_counts_clean, is.na(read_counts_clean), 0)
+```
+
+### Saving the cleaned dataframes
+
+These are saved to later be loaded by the application. Otherwise, this small processing step would be reiterated upon each calculation, at the cost of compute/responsiveness given the limited resources provided by the free hosting provider. 
+
+```{r}
+write.csv(meta_data_sorted,file='meta_data_sorted.csv',row.names = F)
+write.csv(read_counts_clean,file='read_counts_clean.csv',row.names = T)
+```
+
+
+## Performing differential expression analyses
+
+The differential expression analysis based on the Negative Binomial (a.k.a. Gamma-Poisson) distribution is performed, utilizing the **DESeq2** package. 
+
+### Differential expression (sex)
+
+The differential expression is observed for the grouping variable **sex**, i.e., *male* vs. *female* individuals. This analysis is performed as a sanity check for the analysis pipeline. In considering a differential expression between the two genders, we are bound to see an enrichment in Y chromosome genes in the male group over the female group. 
+
+```{r,cache=T}
+DEA_sex <- DESeqDataSetFromMatrix(countData = read_counts_clean,
+                              colData = meta_data_sorted,
+                              design = ~ sex) # which grouping variable to evaluate
+DEA_sex  <- DESeq(DEA_sex)
+
+# filtering low count genes, threshold of 10 
+DEA_sex <- DEA_sex[rowSums(counts(DEA_sex)) > 10, ]
+```
+
+
+```{r,cache=T}
+res <- results(DEA_sex, contrast = c("sex", "male", "female"))
+
+# Ordering the results by adjusted p-value
+resOrdered <- res[order(res$padj), ]
+
+# Identifying significant genes as an adjusted pvalue <0.05 and DEGE > 4 
+resOrdered$sign<-(resOrdered$padj < 0.05  & abs(resOrdered$log2FoldChange)>2)%>%
+  coalesce(FALSE)
+
+significant_genes <- res[which(res$padj < 0.05),]
+```
+
+### Creating a volcano plot
+
+A volcano plot depicts the log2 foldchanges on the x axis and -log10 transformation of the adjusted p values on the y axis. 
+
+This translates to a biological significance across the x axis. Two vertical lines are drawn, -2 and 2 to depict a differential gene expression of four times less or four times larger comparing both groups. O
+
+This also portrays a statistical significance along the y axis. The -log10 transformation has the most significant values placed higher along the y axis. 
+
+
+```{r}
+ggplot(as.data.frame(resOrdered), aes(x=log2FoldChange, y=-log10(padj))) +
+  geom_point(aes(color=sign),alpha=0.4) +
+  theme_minimal() +
+  lims(x=c(-4,4),y=c(0,4.5))+
+  theme(legend.position = 'None')+
+  labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value") +
+  geom_hline(yintercept = -log10(0.05), linetype="dashed", color="red")+ # statistical significance
+  geom_vline(xintercept=c(-2, 2), linetype="dashed", color="red")+ # Biological relevance lines
+  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "black")) 
+```
+
+### Creating an MA-plot
+
+M (x axis): The average (Mean) expression levels (log-scale) of genes across samples or conditions.
+
+A (y axis): It displays the log-ratio of expression differences (fold change) against these averages to identify differentially expressed genes, similar to the x axis of of a volcano plot.
+
+
+```{r}
+# Extract normalized counts
+normalized_counts <- counts(DEA_sex, normalized = TRUE)
+
+# Calculate log fold changes
+log2_fold_changes <- res$log2FoldChange
+
+# Calculate average expression (M values)
+average_expression <- rowMeans(normalized_counts)
+
+# Create a data frame for plotting
+ma_data <- data.frame(
+  M = average_expression,
+  A = log2_fold_changes,
+  gene = rownames(res)
+)
+# Optionally highlight significant genes
+ma_data_significant <- ma_data[rownames(ma_data) %in% rownames(significant_genes),]
+
+ggplot(ma_data, aes(x = M, y = A)) +
+  geom_point(data = ma_data, alpha = 0.5) +  # Non-significant points
+  geom_point(data = ma_data_significant, color = "red", alpha = 0.8) +  # Significant points in red
+  theme_minimal() +
+  labs(title = "MA Plot with Significant Genes Highlighted",
+       x = "Average Expression (M)",
+       y = "Log2 Fold Change (A)") +
+  geom_hline(yintercept = c(-1.5, 1.5), linetype = "dashed", color = "red") +
+  scale_x_log10(labels = scales::comma)
+```
+
+
+```{r}
+diff_exp_analysis_custom <-function(counts,metadata,subset_loc='cerebellum',design='sex'){
+
+  md_subset<-metadata %>%
+    dplyr::filter(sampling_location == subset_loc) 
+  rownames(md_subset)<-md_subset$samples
+  rc_subset<-counts[,(colnames(counts) %in% md_subset$samples)]
+  
+  DEA_custom <- DESeqDataSetFromMatrix(countData = rc_subset,
+                              colData = md_subset,
+                              design = as.formula(paste0("~", design))) # which grouping variable to evaluate
+DEA_custom  <- DESeq(DEA_custom)
+
+# contrast design: pick first and last level for a sorted variable 
+# this doesn't matter for binary variables, only for the genotype design, as it
+# provides three options. Here homozygous ApoE 3,3 vs Apo4,4 is desired. 
+res <- results(DEA_custom, 
+               contrast =c(design,sort(unique(md_subset[[design]])
+                                       [c(1,length(unique(md_subset[[design]])))])))
+
+
+# Ordering the results by adjusted p-value
+res<-res[order(res$padj), ]
+res$stat_sign<-(res$padj < 0.05) & !is.na(res$padj)
+res$bio_sign<-(abs(res$log2FoldChange) >2) & !is.na(res$log2FoldChange)
+res$ENSEMBL<-rownames(res)
+
+return(res)
+}
+
+
+DEA_volcano_plotter <- function(DEA_res){
+  ggplot(as.data.frame(DEA_res), aes(x=log2FoldChange, y=-log10(padj))) +
+  geom_point(aes(color=stat_sign),alpha=0.7) +
+  theme_minimal() +
+  theme(legend.position = 'None')+
+  labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value") +
+  geom_hline(yintercept = -log10(0.05), linetype="dashed", color="#7aa6a1")+ # statistical significance
+  geom_vline(xintercept=c(-2, 2), linetype="dashed", color="#7aa6a1")+ # Biological relevance lines
+    theme(
+      plot.background = element_rect(fill = NA), # Make the plot background transparent
+      panel.background = element_rect(fill = NA), 
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_line(color = "#BEBEBE"),
+      panel.grid.major.y =element_line(color = "#BEBEBE"),
+      legend.position='none',
+      axis.title = element_text(color = "#7aa6a1"),
+      axis.text = element_text(color = "#7aa6a1"))+
+  scale_color_manual(values=c('TRUE'='#7aa6a1','FALSE'='black'))
+}
+```
+
+
+```{r}
+DEA_sex_results_in_cerebellum <-diff_exp_analysis_custom(read_counts_clean,
+                                   meta_data_sorted,
+                                   subset_loc = 'cerebellum',
+                                   design='sex')
+
+DEA_sex_results_in_pfc <-diff_exp_analysis_custom(read_counts_clean,
+                                   meta_data_sorted,
+                                   subset_loc = 'prefrontal cortex',
+                                   design='sex')
+
+DEA_genotype_results_in_cerebellum<-diff_exp_analysis_custom(read_counts_clean,
+                                   meta_data_sorted,
+                                   subset_loc = 'cerebellum',
+                                   design='genotype')
+
+DEA_genotype_results_in_pfc<-diff_exp_analysis_custom(read_counts_clean,
+                                   meta_data_sorted,
+                                   subset_loc = 'prefrontal cortex',
+                                   design='genotype')
+
+DEA_disease_results_in_cerebellum<-diff_exp_analysis_custom(read_counts_clean,
+                                   meta_data_sorted,
+                                   subset_loc = 'cerebellum',
+                                   design='disease')
+
+DEA_disease_results_in_pfc<-diff_exp_analysis_custom(read_counts_clean,
+                                   meta_data_sorted,
+                                   subset_loc = 'prefrontal cortex',
+                                   design='disease')
+```
+ 
+ Creating a dataframe with all Ensemble Gene Ids and their corresponding chromosome on which they reside. This is used to label the statistically differentially expressed genes. 
+ 
+```{r}
+map<-read_counts %>%
+  dplyr::select(Chr) %>% # take chromosomal location data
+  mutate(ENSEMBL = rownames(.))
+
+map$Chr <-gsub(';.*','',map$Chr) # reduce data to just chromosome letter or number
+```
+
+```{r}
+
+# sex differential analyses
+DEA_sex_results_in_cerebellum <- left_join(as.data.frame(DEA_sex_results_in_cerebellum), 
+                                           map, by = "ENSEMBL")
+DEA_sex_results_in_pfc<- left_join(as.data.frame(DEA_sex_results_in_pfc), 
+                                           map, by = "ENSEMBL")
+# genotype differential analyses
+DEA_genotype_results_in_cerebellum<- left_join(as.data.frame(DEA_genotype_results_in_cerebellum), 
+                                           map, by = "ENSEMBL")
+DEA_genotype_results_in_pfc<- left_join(as.data.frame(DEA_genotype_results_in_pfc), 
+                                           map, by = "ENSEMBL")
+# disease differetial analyses
+DEA_disease_results_in_cerebellum<- left_join(as.data.frame(DEA_disease_results_in_cerebellum), 
+                                           map, by = "ENSEMBL")
+DEA_disease_results_in_pfc<- left_join(as.data.frame(DEA_disease_results_in_pfc), 
+                                           map, by = "ENSEMBL")
+```
+
+```{r}
+write.csv(DEA_sex_results_in_cerebellum,'DEA_sex_results_in_cerebellum.csv')
+write.csv(DEA_sex_results_in_pfc,'DEA_sex_results_in_pfc.csv')
+
+write.csv(DEA_genotype_results_in_cerebellum,'DEA_genotype_results_in_cerebellum.csv')
+write.csv(DEA_genotype_results_in_pfc,'DEA_genotype_results_in_pfc.csv')
+
+write.csv(DEA_disease_results_in_cerebellum,'DEA_disease_results_in_cerebellum.csv')
+write.csv(DEA_disease_results_in_pfc,'DEA_disease_results_in_pfc.csv')
+```
+
+
+```{r}
+DEA_volcano_plotter(DEA_disease_results_in_cerebellum)+
+  geom_label(aes(label = ifelse(stat_sign, Chr, NA),color=stat_sign))
+```
+
+```{r}
+DEA_volcano_plotter(DEA_sex_results_in_pfc)+
+  geom_label(aes(label = ifelse(stat_sign, Chr, NA),color=stat_sign))
+```
+
+### Fetching and saving the entrezgene_ids for mapping
+
+```{r,eval=F}
+ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+entrez_mapping <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id'),
+                        filters = 'ensembl_gene_id',
+                        values = DEA_disease_pfc_data$ENSEMBL, 
+                        #or any of the datasets, all 62705 ensembl_gene_ids
+                        mart = ensembl)
+
+# Remove any unmapped entries
+entrez_mapping <- na.omit(entrez_mapping)
+
+write.csv(entrez_mapping,file='entrez_mapping.csv')
+```
+

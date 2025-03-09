@@ -118,20 +118,26 @@ ui <- fluidPage(
                         ),
                  )),
                  fluidRow(
-                 column(7,div(class = "custom-panel",
+                 column(12,div(class = "custom-panel",
                                h3("Significantly differentially expressed genes"),
                                withSpinner(dataTableOutput("signi_gene_table")),
                         ),
                  ),
-                 column(5,div(class = "custom-panel",
+                 column(12,div(class = "custom-panel",
                                h3("Gene ontology enrichment"),
                                withSpinner(uiOutput("GOE_plot_or_message")),
                  ),
                  ),
         ),
+      ),
+      tabPanel('data exploration and preparation (.Rmd)',
+               includeMarkdown('www/ApoE.Rmd'),
+    ),
+      tabPanel('app functions',
+               includeMarkdown('www/app_functions.Rmd'),
       )
-    )
   )
+)
 )
 )
 
@@ -278,7 +284,7 @@ server <- function(input, output) {
   })
   
   output$GOE_plot <- renderPlotly({
-    GOE_plotter(select_signi_genes(),select_GOE_data())
+    ggplotly(GOE_plotter(select_signi_genes(),select_GOE_data()),tooltip = c("ONTOLOGY", "y"))
   })
 }
 
