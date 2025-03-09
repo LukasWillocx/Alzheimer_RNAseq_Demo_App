@@ -138,9 +138,15 @@ table.display.dataTable > tbody > tr.selected:hover > *  {
     box-shadow: inset 0 0 0 9999px #f0c8a8 !important;
 }
 
+/* Parent container hierarchy */
+html, body, .shiny-page-wrapper, .html-widget {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
 
 #sankey {
-  flex: 16 9 auto !important;
-  min-height: 35vh !important;
+  flex: 1 1 auto !important;
+  min-height: 40vh !important;
   min-width: 100% !important; /* Critical for Firefox flex */
 }
