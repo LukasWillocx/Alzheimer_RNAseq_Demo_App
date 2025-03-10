@@ -33,7 +33,7 @@ ui <- fluidPage(
           class = "theme-toggle-btn"
         )
     ), 
-    windowTitle = "DS Portfolio"
+    windowTitle = "Alzheimer RNASeq Demo"
   ),
   
   sidebarLayout(
