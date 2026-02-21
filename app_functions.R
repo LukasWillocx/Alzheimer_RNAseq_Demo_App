@@ -1,0 +1,193 @@
+sankey_design <- function(df, theme = my_theme()) {
+  text_color <- get_theme_colors(theme)$body_color
+  df <- df %>%
+    mutate(age_group = cut(age,
+                           breaks = c(60, 70, 80, 90, 100),
+                           labels = c("60-69", "70-79", "80-89", "90+"),
+                           include.lowest = TRUE))
+  
+  # Create ordered nodes (5 levels)
+  nodes <- data.frame(
+    name = c(
+      as.character(unique(df$disease)),
+      as.character(unique(df$genotype)),
+      as.character(unique(df$sex)),
+      as.character(unique(df$age_group)),
+      as.character(unique(df$sampling_location))
+    )
+  )
+  
+  # Create connection layers
+  links <- bind_rows(
+    df %>%
+      group_by(disease, genotype) %>%
+      summarise(value = n(), .groups = "drop") %>%
+      mutate(source = match(disease, nodes$name) - 1,
+             target = match(genotype, nodes$name) - 1),
+    df %>%
+      group_by(genotype, sex) %>%
+      summarise(value = n(), .groups = "drop") %>%
+      mutate(source = match(genotype, nodes$name) - 1,
+             target = match(sex, nodes$name) - 1),
+    df %>%
+      group_by(sex, age_group) %>%
+      summarise(value = n(), .groups = "drop") %>%
+      mutate(source = match(sex, nodes$name) - 1,
+             target = match(age_group, nodes$name) - 1),
+    df %>%
+      group_by(age_group, sampling_location) %>%
+      summarise(value = n(), .groups = "drop") %>%
+      mutate(source = match(age_group, nodes$name) - 1,
+             target = match(sampling_location, nodes$name) - 1)
+  ) %>%
+    dplyr::select(source, target, value)
+  
+  # Generate Sankey diagram
+  sankeyPlot <- sankeyNetwork(
+    Links = links,
+    Nodes = nodes,
+    Source = "source",
+    Target = "target",
+    Value = "value",
+    NodeID = "name",
+    units = "Samples",
+    fontFamily = "arial",
+    fontSize = 15,
+    nodeWidth = 25,
+    nodePadding = 10,
+    sinksRight = TRUE,
+    iterations = 5,
+    width = '100%'
+  )
+  
+  customSankey <- sankeyPlot %>%
+    htmlwidgets::onRender(sprintf("
+    function(el) {
+      var textColor = '%s';
+      const customColors = ['#d4b996'];
+      d3.selectAll('path.link')
+        .style('stroke', function(d, i) {
+          return customColors[i %% customColors.length];
+        });
+
+      var cols_x = this.sankey.nodes().map(d => d.x)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .sort(function(a, b){ return a - b });
+      var labels = ['disease', 'genotype', 'sex', 'age', 'location'];
+      var svgHeight = el.querySelector('svg').getBoundingClientRect().height;
+
+      cols_x.forEach((d, i) => {
+        if (i < labels.length) {
+          d3.select(el).select('svg')
+            .append('text')
+            .attr('x', d + 31.8)
+            .attr('y', svgHeight - 12)
+            .attr('dy', '.35em')
+            .attr('text-anchor', 'middle')
+            .style('font-size', '16px')
+            .style('fill', textColor)
+            .text(labels[i]);
+        }
+      });
+
+      el.style.backgroundColor = 'transparent';
+
+      el.querySelectorAll('text').forEach(function(node) {
+        node.style.fill = textColor;
+      });
+
+      const customNodeColors =
+        ['blue','red','lightgrey','grey','black','lightblue','pink',
+         'darkgray','gray','lightgrey','gainsboro','DarkSalmon','Teal'];
+      d3.selectAll('g.node').select('rect')
+        .style('fill', function(d, i) {
+          return customNodeColors[i %% customNodeColors.length];
+        });
+      d3.selectAll('g.node').select('rect')
+        .style('stroke', function(d, i) {
+          return customNodeColors[i %% customNodeColors.length];
+        });
+    }",
+                                  text_color)
+    )
+  
+  htmltools::browsable(customSankey)
+}
+
+
+PCA_samples_plot <- function(pca_result, meta_data, variable, theme = my_theme()) {
+  pc_scores    <- pca_result$x
+  pc_variance  <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+  
+  pc_scores_df <- as.data.frame(pc_scores)
+  colnames(pc_scores_df) <- paste0("PC", 1:ncol(pc_scores_df))
+  pc_scores_df$samples <- rownames(pc_scores_df)
+  pc_scores_df <- left_join(pc_scores_df, meta_data, by = 'samples')
+  
+  p <- ggplot(pc_scores_df, aes(x = PC1, y = PC2)) +
+    geom_point(aes_string(color = variable, text = variable)) +
+    labs(x = paste0("PC1 (", round(pc_variance[1], 2), "% variance)"),
+         y = paste0("PC2 (", round(pc_variance[2], 2), "% variance)")) +
+    scale_color_luwi_d(theme = theme) +
+    theme_luwi(theme = theme) +
+    theme(legend.position = 'none')
+  
+  luwi_ggplotly(p, theme = theme, tooltip = c("text", "x", "y")) %>%
+    layout(showlegend = FALSE)
+}
+
+
+DEA_volcano_plotter <- function(DEA_res, theme = my_theme()) {
+  colors <- get_theme_colors(theme)
+  
+  ggplot(as.data.frame(DEA_res), aes(x = log2FoldChange, y = -log10(padj),
+                                     text = ENSEMBL)) +
+    geom_point(aes(color = stat_sign & bio_sign), alpha = 0.55, size = 1.5) +
+    labs(x = "Log2 Fold Change", y = "-Log10 Adjusted P-value") +
+    geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = colors$primary) +
+    geom_vline(xintercept = c(-2, 2),     linetype = "dashed", color = colors$primary) +
+    scale_color_manual(values = c('TRUE' = colors$secondary, 'FALSE' = 'grey40')) +
+    theme_luwi(theme = theme) +
+    theme(legend.position = 'none')
+}
+
+
+go_enrich <- function(DEA_data) {
+  signi_genes <- DEA_data %>%
+    filter(padj < 0.05 & abs(log2FoldChange) > 2) %>%
+    dplyr::select(c(ENSEMBL, Chr, log2FoldChange, padj)) %>%
+    arrange(padj) %>%
+    left_join(entrez_mapping, by = 'ENSEMBL')
+  
+  entrez_genes <- signi_genes[!is.na(signi_genes$entrezgene_id), ]
+  ego <- enrichGO(
+    gene          = entrez_genes$entrezgene_id,
+    OrgDb         = org.Hs.eg.db,
+    ont           = "ALL",
+    pAdjustMethod = "BH",
+    qvalueCutoff  = 0.05,
+    readable      = TRUE
+  )
+  ego_df <- as.data.frame(ego) %>%
+    arrange(desc(Count), p.adjust)
+  
+  ego_df <- ego_df[1:10, ]
+}
+
+
+GOE_plotter <- function(signi_genes, GOE_data, theme = my_theme()) {
+  if (nrow(signi_genes) < 15) {
+    stop()
+  } else {
+    GOE_data$Description <- str_wrap(GOE_data$Description, width = 40)
+    
+    ggplot(GOE_data, aes(x = reorder(Description, Count), y = Count)) +
+      geom_bar(stat = "identity", aes(fill = Count), width = 0.7) +
+      scale_fill_viridis_c(option = "C") +
+      coord_flip() +
+      labs(title = "", x = "", y = "Gene count in ontology") +
+      theme_luwi(theme = theme) +
+      theme(legend.position = 'none') +
+      scale_y_continuous(breaks = seq(0, max(GOE_data$Count, na.rm = TRUE), by = 1))
+  }
+}
