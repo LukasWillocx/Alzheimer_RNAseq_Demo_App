@@ -1,7 +1,8 @@
 ### Function to plot the Sankey diagram, showing the sample attribute distributions
 
 ```{r}
-sankey_design<-function(df){
+sankey_design <- function(df, theme = my_theme()) {
+  text_color <- get_theme_colors(theme)$body_color
   df <- df %>%
     mutate(age_group = cut(age,
                            breaks = c(60, 70, 80, 90, 100),
@@ -11,48 +12,45 @@ sankey_design<-function(df){
   # Create ordered nodes (5 levels)
   nodes <- data.frame(
     name = c(
-      as.character(unique(df$disease)),       # Level 1: Disease
-      as.character(unique(df$genotype)),      # Level 2: Genotype
-      as.character(unique(df$sex)),           # Level 3: Sex
-      as.character(unique(df$age_group)),     # Level 4: Age Group
-      as.character(unique(df$sampling_location))  # Level 5: Location
+      as.character(unique(df$disease)),           # Level 1: Disease
+      as.character(unique(df$genotype)),           # Level 2: Genotype
+      as.character(unique(df$sex)),                # Level 3: Sex
+      as.character(unique(df$age_group)),          # Level 4: Age Group
+      as.character(unique(df$sampling_location))   # Level 5: Location
     )
   )
+
   # Create connection layers
   links <- bind_rows(
-    # Disease → Genotype 
-    df %>% 
-      group_by(disease, genotype) %>% 
-      summarise(value = n(), .groups = "drop") %>% 
+    # Disease → Genotype
+    df %>%
+      group_by(disease, genotype) %>%
+      summarise(value = n(), .groups = "drop") %>%
       mutate(source = match(disease, nodes$name) - 1,
              target = match(genotype, nodes$name) - 1),
-    
     # Genotype → Sex
-    df %>% 
-      group_by(genotype, sex) %>% 
-      summarise(value = n(), .groups = "drop") %>% 
+    df %>%
+      group_by(genotype, sex) %>%
+      summarise(value = n(), .groups = "drop") %>%
       mutate(source = match(genotype, nodes$name) - 1,
              target = match(sex, nodes$name) - 1),
-    
     # Sex → Age Group
-    df %>% 
-      group_by(sex, age_group) %>% 
-      summarise(value = n(), .groups = "drop") %>% 
+    df %>%
+      group_by(sex, age_group) %>%
+      summarise(value = n(), .groups = "drop") %>%
       mutate(source = match(sex, nodes$name) - 1,
              target = match(age_group, nodes$name) - 1),
-    
     # Age Group → Location
-    df %>% 
-      group_by(age_group, sampling_location) %>% 
-      summarise(value = n(), .groups = "drop") %>% 
+    df %>%
+      group_by(age_group, sampling_location) %>%
+      summarise(value = n(), .groups = "drop") %>%
       mutate(source = match(age_group, nodes$name) - 1,
              target = match(sampling_location, nodes$name) - 1)
-  ) %>% 
+  ) %>%
     dplyr::select(source, target, value)
-  
-  
+
   # Generate Sankey diagram
-  sankeyPlot<-sankeyNetwork(
+  sankeyPlot <- sankeyNetwork(
     Links = links,
     Nodes = nodes,
     Source = "source",
@@ -64,64 +62,62 @@ sankey_design<-function(df){
     fontSize = 15,
     nodeWidth = 25,
     nodePadding = 10,
-    sinksRight = T,
-    iterations = 5
-    )
-  
-  
-  customSankey <- sankeyPlot %>%
-    htmlwidgets::onRender("
-    function(el) {
-      // Define custom colors for bands
-      const customColors = ['#d4b996'];
+    sinksRight = TRUE,
+    iterations = 5,
+    width = '100%'
+  )
 
-      // Select all band elements and apply custom colors
+  customSankey <- sankeyPlot %>%
+    htmlwidgets::onRender(sprintf("
+    function(el) {
+      var textColor = '%s';
+      const customColors = ['#d4b996'];
       d3.selectAll('path.link')
         .style('stroke', function(d, i) {
-          return customColors[i % customColors.length];
+          return customColors[i %% customColors.length];
         });
-      // Add column headers below level blocks
-      var cols_x = this.sankey.nodes().map(d => d.x).filter((v, i, a) => a.indexOf(v) === i).sort(function(a, b){return a - b});
+
+      var cols_x = this.sankey.nodes().map(d => d.x)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .sort(function(a, b){ return a - b });
       var labels = ['disease', 'genotype', 'sex', 'age', 'location'];
       var svgHeight = el.querySelector('svg').getBoundingClientRect().height;
 
       cols_x.forEach((d, i) => {
-        if (i < labels.length) { // Ensure we don't go out of bounds
+        if (i < labels.length) {
           d3.select(el).select('svg')
             .append('text')
             .attr('x', d + 31.8)
-            .attr('y', svgHeight - 12) // Adjust the y position to be below the diagram
-            .attr('dy', '.35em') // Adjust vertical alignment if needed
-            .attr('text-anchor', 'middle') // Center the text horizontally
-            .style('font-size', '16px') // Adjust font size if necessary
+            .attr('y', svgHeight - 12)
+            .attr('dy', '.35em')
+            .attr('text-anchor', 'middle')
+            .style('font-size', '16px')
+            .style('fill', textColor)
             .text(labels[i]);
         }
       });
-      // Set the background color to transparent
+
       el.style.backgroundColor = 'transparent';
-      // Change the text color to blue
+
       el.querySelectorAll('text').forEach(function(node) {
-        node.style.fill = '#7aa6a1';
+        node.style.fill = textColor;
       });
-      // Define custom colors for nodes
-      const customNodeColors = 
-      ['blue', 'red','lightgrey', 'grey','black', 'lightblue','pink', 'darkgray','gray', 'lightgrey','gainsboro', 'DarkSalmon','Teal'];
-      // Select all node elements and apply custom colors
-      d3.selectAll('g.node')
-        .select('rect')
+
+      const customNodeColors =
+        ['blue','red','lightgrey','grey','black','lightblue','pink',
+         'darkgray','gray','lightgrey','gainsboro','DarkSalmon','Teal'];
+      d3.selectAll('g.node').select('rect')
         .style('fill', function(d, i) {
-          return customNodeColors[i % customNodeColors.length];
-      });
-      d3.selectAll('g.node')
-        .select('rect')
+          return customNodeColors[i %% customNodeColors.length];
+        });
+      d3.selectAll('g.node').select('rect')
         .style('stroke', function(d, i) {
-          return customNodeColors[i % customNodeColors.length];
-      });
-      
-    }"
+          return customNodeColors[i %% customNodeColors.length];
+        });
+    }",
+    text_color)
     )
-  
-  # Display the custom Sankey diagram 
+
   htmltools::browsable(customSankey)
 }
 ```
@@ -129,124 +125,89 @@ sankey_design<-function(df){
 ### Function to plot the sample attributes in a two-dimensional principal component vector space
 
 ```{r}
-PCA_samples_plot <-function(pca_result,meta_data,variable){
-  # Extract the principal components and their variances
-  pc_scores <- pca_result$x
-  pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
-  
-  # Visualize the PCA results using a scatter plot
+PCA_samples_plot <- function(pca_result, meta_data, variable, theme = my_theme()) {
+  pc_scores    <- pca_result$x
+  pc_variance  <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+
   pc_scores_df <- as.data.frame(pc_scores)
   colnames(pc_scores_df) <- paste0("PC", 1:ncol(pc_scores_df))
-  pc_scores_df$samples<-rownames(pc_scores_df)
-  pc_scores_df<-left_join(pc_scores_df,meta_data,by='samples')
-  
+  pc_scores_df$samples <- rownames(pc_scores_df)
+  pc_scores_df <- left_join(pc_scores_df, meta_data, by = 'samples')
+
   p <- ggplot(pc_scores_df, aes(x = PC1, y = PC2)) +
-    geom_point(aes_string(color=variable)) +
+    geom_point(aes_string(color = variable, text = variable)) +
     labs(x = paste0("PC1 (", round(pc_variance[1], 2), "% variance)"),
-         y = paste0("PC2 (", round(pc_variance[2], 2), "% variance)"))+
-    theme(
-      plot.background = element_rect(fill = "transparent", colour = NA),
-      panel.background = element_rect(fill = "transparent", colour = NA),
-      panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_line(color = "#BEBEBE"),
-      panel.grid.major.y = element_line(color = "#BEBEBE"),
-      legend.position='none',
-      axis.title = element_text(color = "#7aa6a1"),
-      axis.text = element_text(color = "#7aa6a1"),
-    )
-  
-  ggplotly(p)
+         y = paste0("PC2 (", round(pc_variance[2], 2), "% variance)")) +
+    scale_color_luwi_d(theme = theme) +
+    theme_luwi(theme = theme) +
+    theme(legend.position = 'none')
+
+  luwi_ggplotly(p, theme = theme, tooltip = c("text", "x", "y")) %>%
+    layout(showlegend = FALSE)
 }
 ```
 
 ### Function to plot the volcano plot of a differential gene expression analysis
 
 ```{r}
-DEA_volcano_plotter <- function(DEA_res){
-  ggplot(as.data.frame(DEA_res), aes(x=log2FoldChange, y=-log10(padj))) +
-    geom_point(aes(color=stat_sign&bio_sign), alpha=0.7,size=2) +
-    theme_minimal() +
-    theme(legend.position = 'None',
-          plot.background = element_rect(fill = "transparent", colour = NA),
-          panel.background = element_rect(fill = "transparent", colour = NA),
-          panel.grid.minor = element_blank(),
-          panel.grid.major.x = element_line(color = "#BEBEBE"),
-          panel.grid.major.y = element_line(color = "#BEBEBE"),
-          axis.title = element_text(color = "#7aa6a1"),
-          axis.text = element_text(color = "#7aa6a1")) +
-    labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value") +
-    geom_hline(yintercept = -log10(0.05), linetype="dashed", color="#7aa6a1") + # Statistical significance
-    geom_vline(xintercept=c(-2, 2), linetype="dashed", color="#7aa6a1") + # Biological relevance lines
-    scale_color_manual(values=c('TRUE'='#7aa6a1', 'FALSE'='black'))
+DEA_volcano_plotter <- function(DEA_res, theme = my_theme()) {
+  colors <- get_theme_colors(theme)
+
+  ggplot(as.data.frame(DEA_res), aes(x = log2FoldChange, y = -log10(padj),
+                                      text = ENSEMBL)) +
+    geom_point(aes(color = stat_sign & bio_sign), alpha = 0.55, size = 1.5) +
+    labs(x = "Log2 Fold Change", y = "-Log10 Adjusted P-value") +
+    geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = colors$primary) +
+    geom_vline(xintercept = c(-2, 2),     linetype = "dashed", color = colors$primary) +
+    scale_color_manual(values = c('TRUE' = colors$secondary, 'FALSE' = 'grey40')) +
+    theme_luwi(theme = theme) +
+    theme(legend.position = 'none')
 }
 ```
 
 ### Function to perform the gene ontology enrichment analysis
 
-This function wasn't run in the app itself, but beforehand to establish the GOE datasets. The enrichGO function takes a while to produce an output, the output was written to *.csv* files in the **www** directory.
-
 ```{r}
-go_enrich<-function(DEA_data){
-  
- signi_genes<-DEA_data%>%
-    filter(padj < 0.05 & abs(log2FoldChange)>2)%>%
-    dplyr::select(c(ENSEMBL,Chr,log2FoldChange,padj))%>%
+go_enrich <- function(DEA_data) {
+  signi_genes <- DEA_data %>%
+    filter(padj < 0.05 & abs(log2FoldChange) > 2) %>%
+    dplyr::select(c(ENSEMBL, Chr, log2FoldChange, padj)) %>%
     arrange(padj) %>%
-    left_join(entrez_mapping,by='ENSEMBL')
-  
-  entrez_genes <- signi_genes[!is.na(signi_genes$entrezgene_id),]
+    left_join(entrez_mapping, by = 'ENSEMBL')
+
+  entrez_genes <- signi_genes[!is.na(signi_genes$entrezgene_id), ]
   ego <- enrichGO(
-    gene = entrez_genes$entrezgene_id,
-    OrgDb = org.Hs.eg.db,
-    ont = "ALL",  # Biological Process; can also use "CC" (Cellular Component) or "MF" (Molecular Function)
+    gene          = entrez_genes$entrezgene_id,
+    OrgDb         = org.Hs.eg.db,
+    ont           = "ALL",
     pAdjustMethod = "BH",
-    qvalueCutoff = 0.05,
-    readable = TRUE
+    qvalueCutoff  = 0.05,
+    readable      = TRUE
   )
   ego_df <- as.data.frame(ego) %>%
-    arrange(desc(Count),p.adjust) 
-  
-  ego_df <- ego_df[1:10,]
+    arrange(desc(Count), p.adjust)
+
+  ego_df <- ego_df[1:10, ]
 }
 ```
 
 ### Function to return the gene ontology enrichment barplot
 
 ```{r}
-GOE_plotter <- function(signi_genes, GOE_data){
-  if (nrow(signi_genes)<15){
+GOE_plotter <- function(signi_genes, GOE_data, theme = my_theme()) {
+  if (nrow(signi_genes) < 15) {
     stop()
   } else {
-    
-  # Wrap descriptions to span across multiple lines if necessary (GOs tend to be quite long)
-  GOE_data$Description <- str_wrap(GOE_data$Description, width = 40)
-  
-  # Create the ggplot
-  p <- ggplot(GOE_data, aes(x=reorder(Description,Count), y = Count)) +
-    geom_bar(stat = "identity", aes(fill = Count),width=0.7) +  # Map fill to Count
-    scale_fill_viridis_c(option = "C") +  # Use a color gradient for fill
-    theme_minimal() +
-    coord_flip()+
-    labs(
-      title = "",
-      x = "",
-      y = "Gene count in ontology"
-    ) +
-    theme(
-      plot.background = element_rect(fill = "transparent", colour = NA),
-      panel.background = element_rect(fill = "transparent", colour = NA),
-      panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_line(color = "#BEBEBE"),
-      panel.grid.major.y = element_line(color = "#BEBEBE"),
-      legend.position='none',
-      axis.title = element_text(color = "#7aa6a1"),
-      axis.text = element_text(color = "#7aa6a1"),
-    )+
-    scale_y_continuous(breaks = seq(0, max(GOE_data$Count, na.rm = TRUE), by = 1))  # Set y-axis breaks
+    GOE_data$Description <- str_wrap(GOE_data$Description, width = 40)
+
+    ggplot(GOE_data, aes(x = reorder(Description, Count), y = Count)) +
+      geom_bar(stat = "identity", aes(fill = Count), width = 0.7) +
+      scale_fill_viridis_c(option = "C") +
+      coord_flip() +
+      labs(title = "", x = "", y = "Gene count in ontology") +
+      theme_luwi(theme = theme) +
+      theme(legend.position = 'none') +
+      scale_y_continuous(breaks = seq(0, max(GOE_data$Count, na.rm = TRUE), by = 1))
   }
 }
 ```
-
-
-
-
